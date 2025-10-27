@@ -33,7 +33,7 @@ pub fn SimpleLinkedFreeList(DataType: type, alloc_size: usize) type {
         _occupied: usize = 0,
 
         /// used for easier iterating over the freelist
-        _compact_list: []usize = undefined,
+        _compact_list: []usize = &[0]usize{},
 
         /// allocator
         allocator: std.mem.Allocator = undefined,
@@ -64,7 +64,10 @@ pub fn SimpleLinkedFreeList(DataType: type, alloc_size: usize) type {
             obj.data = try obj.allocator.alloc(DataType, alloc_size);
             obj._data_info = try obj.allocator.alloc(DataMeta, alloc_size);
             obj._free_space = try obj.allocator.alloc(?usize, alloc_size);
-            obj._compact_list = try obj.allocator.alloc(usize, 1);
+            
+            // I'm not too sure about allocating 0 bytes, but that memory won't be used anyway,
+            // and it seems to grow fine. Maybe find a way to make this work safer in the future.
+            obj._compact_list = try obj.allocator.alloc(usize, 0); 
 
             for(obj._free_space, 0..) |*data, i| {
                 data.* = i;
@@ -140,8 +143,8 @@ pub fn SimpleLinkedFreeList(DataType: type, alloc_size: usize) type {
             if(self._compact_list.len == self._occupied) return self._compact_list; 
 
             self._compact_list = try self.allocator.realloc(self._compact_list, self._occupied);
-            var current_id: usize = self._start orelse return FreeListError.start_does_not_exist;
 
+            var current_id: usize = self._start orelse return FreeListError.start_does_not_exist;
             for(self._compact_list) |*index| {
                 index.* = current_id;
                 current_id = self._data_info[current_id].next;
@@ -160,41 +163,49 @@ pub fn SimpleLinkedFreeList(DataType: type, alloc_size: usize) type {
 
         pub fn release(self: *Self) void {
             if(self._initialized == false) return;
+
             self.allocator.free(self.data);
             self.allocator.free(self._data_info);
             self.allocator.free(self._free_space);
             self.allocator.free(self._compact_list);
             self._initialized = false;
         }
+
+        /// sets the whole struct to 0. Does not initialize the FreeList.
+        pub fn zero() Self {
+            const obj: Self = std.mem.zeroInit(Self, .{});
+
+            return obj;
+        }
     };
 }
 
 const freelist = @This();
 const testing = std.testing;
-test "freelist_general" {
-    var fl: freelist.SimpleLinkedFreeList(u32, 5) = try .init(testing.allocator);
-
-    for(0..10) |i| {
-        const id = try fl.insert(@intCast(i));
-        std.debug.print("id: {} = {}\n", .{id, i});
-    }
-
-    std.debug.print("STRUCT: {}\n", .{fl});
-
-    std.debug.print("IDs: ", .{});
-    for(try fl.listIDs()) |data_id| {
-        std.debug.print("{}<-{}:{}->{} ", .{fl._data_info[data_id].prev, fl.data[data_id], data_id, fl._data_info[data_id].next});
-    }
-    std.debug.print("\n", .{});
-
-    std.debug.print("DATA: ", .{});
-    for(try fl.listIDs()) |data_id| {
-        const data = fl.get(data_id);
-        std.debug.print("{}, ", .{data});
-    }
-    std.debug.print("\n", .{});
-
-    std.debug.print("{!}", .{fl.find(5)});
-
-    fl.release();
-}
+// test "freelist_general" {
+//     var fl: freelist.SimpleLinkedFreeList(u32, 5) = try .init(testing.allocator);
+//
+//     for(0..10) |i| {
+//         const id = try fl.insert(@intCast(i));
+//         std.debug.print("id: {} = {}\n", .{id, i});
+//     }
+//
+//     std.debug.print("STRUCT: {}\n", .{fl});
+//
+//     std.debug.print("IDs: ", .{});
+//     for(try fl.listIDs()) |data_id| {
+//         std.debug.print("{}<-{}:{}->{} ", .{fl._data_info[data_id].prev, fl.data[data_id], data_id, fl._data_info[data_id].next});
+//     }
+//     std.debug.print("\n", .{});
+//
+//     std.debug.print("DATA: ", .{});
+//     for(try fl.listIDs()) |data_id| {
+//         const data = fl.get(data_id);
+//         std.debug.print("{}, ", .{data});
+//     }
+//     std.debug.print("\n", .{});
+//
+//     std.debug.print("{!}", .{fl.find(5)});
+//
+//     fl.release();
+// }

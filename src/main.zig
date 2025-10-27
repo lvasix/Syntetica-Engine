@@ -35,7 +35,8 @@ pub fn main() !void {
     const enemy2: usize = try ent_reg.spawn(.Enemy);
     const enemy3: usize = try ent_reg.spawn(.Enemy);
 
-    std.debug.print("player: {}\n enemy:{}, {}, {}\n", .{player, enemy1, enemy2, enemy3});
+    _ = enemy2;
+    _ = enemy3;
 
     try ent_reg.tick();
     try ent_reg.tick();

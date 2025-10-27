@@ -119,7 +119,7 @@ pub fn Manager(comptime entities: []const type) type {
         /// Entity data container for the actual world entities. These are 
         /// the actual instances of entities in the world, referenced by
         /// the entity world ID.
-        const WorldEntity = struct {
+        pub const WorldEntity = struct {
             /// World entity process ID
             eid: usize = 0, 
 
@@ -128,7 +128,13 @@ pub fn Manager(comptime entities: []const type) type {
 
             /// World entity type
             entity_type: ent_enum_type = .undef,
+
+            /// used for keeping track of alive entities
+            entity_is_alive: bool = false,
         };
+
+        /// Entity enum type
+        pub const EntEnum: type = ent_enum_type;
 
         /// array containing all of the functions, indeces of this table correspond to 
         /// the numerical values of enum fields in the "ent_enum_type" enum.
@@ -137,12 +143,8 @@ pub fn Manager(comptime entities: []const type) type {
         /// current simulation tick
         sim_tick: usize = 0,
 
-        /// reference for the type 
-        /// TODO: remove this, idk why it's here in the first place
-        ent_enum: ent_enum_type = .undef,
-
         /// entity data of type WorldEntity.
-        world_entities: FreeList.SimpleLinkedFreeList(WorldEntity, 200) = undefined,
+        world_entities: FreeList.SimpleLinkedFreeList(WorldEntity, 200) = .zero(),
 
         /// Initialize the manager.
         /// 
@@ -165,6 +167,7 @@ pub fn Manager(comptime entities: []const type) type {
                 man.entity_function_table[i].fn_tick = entity.tick;
                 man.entity_function_table[i].fn_kill = entity.kill;
                 entity.data.data = try @TypeOf(entity.data.data).init(allocator);
+                entity.data._initialized = true;
             }
 
             return man;
@@ -215,7 +218,7 @@ pub fn Manager(comptime entities: []const type) type {
         /// var manager = ...;
         /// const ent_ptr = manager.getEntityPtr(2);
         /// ```
-        pub fn getEntityPtr(self: ThisManager, entity_id: usize) *WorldEntity {
+        pub fn getEntityPtr(self: *ThisManager, entity_id: usize) *WorldEntity {
             return self.world_entities.getPtr(entity_id);
         }
 
@@ -288,16 +291,18 @@ pub fn Manager(comptime entities: []const type) type {
         /// /// ... (do something with the manager)
         /// ```
         pub fn release(self: *ThisManager) void {
-            std.debug.print("RELEASE RESOURCES::\n", .{});
-
             // delete any remaining entities
-            for(self.world_entities.listIDs() catch @panic("Failed releasing manager")) |entityID| {
-                std.debug.print("killing {}\n", .{entityID});
-                self.kill(entityID);
+
+            if(self.world_entities._start != null) {
+                for(self.world_entities.listIDs() catch @panic("Failed releasing manager")) |entityID| {
+                    self.kill(entityID);
+                }
             }
 
+            // iterating over an array of types, thus must be an inline for loop
             inline for(entities) |entity| { // release all of the entity internal data
                 entity.data.data.release();
+                entity.data._initialized = false;
             }
 
             self.world_entities.release();
@@ -395,20 +400,216 @@ pub fn DataContainer(DataType: type) type {
 const testing = std.testing;
 test "fnArgs" {
     const foo: fnArgs = .{};
-    testing.expect(@TypeOf(foo.entityID) == usize);
-    testing.expect(@TypeOf(foo.entity_data_id) == usize);
+    try testing.expect(@TypeOf(foo.entityID) == usize);
+    try testing.expect(@TypeOf(foo.entity_data_id) == usize);
 }
 
 test "entRegistry" {
-    const foo: entRegistry = .{};
-    testing.expect(@TypeOf(foo.fn_tick) == *const fn(*fnArgs) void);
-    testing.expect(@TypeOf(foo.fn_kill) == *const fn(*fnArgs) void);
-    testing.expect(@TypeOf(foo.fn_init) == *const fn(*fnArgs) anyerror!void);
+    const foo: entRegistry = undefined;
+    try testing.expect(@TypeOf(foo.fn_tick) == *const fn(*fnArgs) void);
+    try testing.expect(@TypeOf(foo.fn_kill) == *const fn(*fnArgs) void);
+    try testing.expect(@TypeOf(foo.fn_init) == *const fn(*fnArgs) anyerror!void);
 }
 
 test "getEntityName" {
     const Foo = struct {};
-    const name = getEntityName(Foo);
-    testing.expect(@TypeOf(name) == [:0]const u8);
-    testing.expect(std.mem.eql(u8, name, "Foo"));
+    const name = comptime getEntityName(Foo);
+    try testing.expect(@TypeOf(name) == [:0]const u8);
+    try testing.expect(std.mem.eql(u8, name, "Foo"));
+}
+
+test "Manager" {
+    const FooEntity = struct {
+
+        /// mandatory data field declaration
+        pub var data: Entity.DataContainer(u8) = .{};
+
+        pub fn init(self: *fnArgs) !void {
+            _ = self;
+        }
+
+        pub fn tick(self: *fnArgs) void {
+            _ = self;
+        }
+
+        pub fn kill(self: *fnArgs) void {
+            _ = self;
+        }
+    };
+
+    const FooEntity1 = struct {
+        pub var data: Entity.DataContainer(u8) = .{};
+        pub fn init(self: *fnArgs) !void {_ = self;}
+        pub fn tick(self: *fnArgs) void {_ = self;}
+        pub fn kill(self: *fnArgs) void {_ = self;}
+    };
+
+    const man = Manager(&.{FooEntity, FooEntity1});
+    try testing.expect(@hasField(man.EntEnum, "FooEntity"));
+    try testing.expect(@hasField(man.EntEnum, "FooEntity1"));
+}
+
+test "Manager.init" {
+    const FooEntity = struct {
+        pub var data: Entity.DataContainer(u8) = .{};
+        pub fn init(self: *fnArgs) !void {_ = self;}
+        pub fn tick(self: *fnArgs) void {_ = self;}
+        pub fn kill(self: *fnArgs) void {_ = self;}
+    };
+
+    var man: Manager(&.{FooEntity}) = try .init(testing.allocator);
+    defer man.release();
+
+    try testing.expect(man.world_entities._initialized);
+
+    try testing.expect(man.entity_function_table[0].fn_init == FooEntity.init);
+    try testing.expect(man.entity_function_table[0].fn_tick == FooEntity.tick);
+    try testing.expect(man.entity_function_table[0].fn_kill == FooEntity.kill);
+    try testing.expect(FooEntity.data.data._initialized);
+    try testing.expect(FooEntity.data._initialized);
+
+    try testing.expect(man.sim_tick == 0);
+}
+
+test "Manager.spawn" {
+    const FooEntity = struct {
+        pub var init_ran: bool = false;
+        pub var data: Entity.DataContainer(u8) = .{};
+        pub fn init(self: *fnArgs) !void {
+            self.entityID = 999; // if this suceeds, the test should fail since we should not be allowed 
+                                 // to change this field. it's readonly
+            self.entity_data_id = 2; // this should suceed
+            init_ran = true;
+        }
+        pub fn tick(self: *fnArgs) void {_ = self;}
+        pub fn kill(self: *fnArgs) void {_ = self;}
+    };
+
+    var man: Manager(&.{FooEntity}) = try .init(testing.allocator);
+    defer man.release();
+
+    const id = try man.spawn(.FooEntity);
+
+    try testing.expect(FooEntity.init_ran);
+    try testing.expect(man.world_entities._occupied == 1);
+    try testing.expect(man.world_entities.data[id].eid == id);
+    try testing.expect(man.world_entities.data[id].edaID == 2);
+    try testing.expect(man.world_entities.data[id].entity_type == .FooEntity);
+}
+
+test "Manager.getEntityPtr" {
+    const FooEntity = struct {
+        pub var data: Entity.DataContainer(u8) = .{};
+        pub fn init(self: *fnArgs) !void {_ = self;}
+        pub fn tick(self: *fnArgs) void {_ = self;}
+        pub fn kill(self: *fnArgs) void {_ = self;}
+    };
+
+    var man: Manager(&.{FooEntity}) = try .init(testing.allocator);
+    defer man.release();
+
+    const id = try man.spawn(.FooEntity);
+
+    const ptr = man.getEntityPtr(id);
+
+    try testing.expect(ptr.eid == id);
+}
+
+test "Manager.kill" {
+    const FooEntity = struct {
+        pub var was_kill_ran = false;
+        pub var data: Entity.DataContainer(u8) = .{};
+        pub fn init(self: *fnArgs) !void {_ = self;}
+        pub fn tick(self: *fnArgs) void {_ = self;}
+        pub fn kill(self: *fnArgs) void {_ = self; was_kill_ran = true;}
+    };
+
+    var man: Manager(&.{FooEntity}) = try .init(testing.allocator);
+    defer man.release();
+    const id = try man.spawn(.FooEntity);
+
+    man.kill(id);
+    try testing.expect(FooEntity.was_kill_ran);
+    // when the actual system for recording a removed item from the free list is 
+    // implemented, check that 
+}
+
+test "Manager.tick" {
+    const FooEntity = struct {
+        pub var was_tick_ran = false;
+        pub var data: Entity.DataContainer(u8) = .{};
+        pub fn init(self: *fnArgs) !void {_ = self;}
+        pub fn tick(self: *fnArgs) void {
+            self.entityID = 999;
+            self.entity_data_id = 2;
+
+            was_tick_ran = true;
+        }
+        pub fn kill(self: *fnArgs) void {_ = self;}
+    };
+
+    var man: Manager(&.{FooEntity}) = try .init(testing.allocator);
+    defer man.release();
+    const id = try man.spawn(.FooEntity);
+
+    try man.tick();
+
+    try testing.expect(man.world_entities.data[id].eid == id);
+    try testing.expect(man.world_entities.data[id].edaID == 2);
+    try testing.expect(FooEntity.was_tick_ran);
+}
+
+test "Manager.release" {
+    const FooEntity = struct {
+        pub var was_kill_ran = false;
+        pub var data: Entity.DataContainer(u8) = .{};
+        pub fn init(self: *fnArgs) !void {_ = self;}
+        pub fn tick(self: *fnArgs) void {_ = self;}
+        pub fn kill(self: *fnArgs) void {_ = self; was_kill_ran = true;}
+    };
+
+    var man: Manager(&.{FooEntity}) = try .init(testing.allocator);
+
+    _ = try man.spawn(.FooEntity);
+
+    man.release();
+
+    try testing.expect(FooEntity.was_kill_ran);
+    try testing.expect(!FooEntity.data._initialized);
+    try testing.expect(!man.world_entities._initialized);
+}
+
+test "DataContainer.reqData" {
+    var cont: DataContainer(u8) = .{};
+    cont.data = try @TypeOf(cont.data).init(testing.allocator);
+    defer cont.data.release();
+
+    const id = try cont.reqData();
+    try testing.expect(@TypeOf(id) == usize);
+}
+
+test "DataContainer.delData" {
+    var cont: DataContainer(u8) = .{};
+    cont.data = try @TypeOf(cont.data).init(testing.allocator);
+    defer cont.data.release();
+
+    const id = try cont.reqData();
+
+    const occ = cont.data._occupied;
+    cont.delData(id);
+    try testing.expect(cont.data._occupied != occ);
+}
+
+test "DataContainer.get" {
+    var cont: DataContainer(u8) = .{};
+    cont.data = try @TypeOf(cont.data).init(testing.allocator);
+    defer cont.data.release();
+
+    const id = try cont.reqData();
+    const ptr = cont.data.getPtr(id);
+    ptr.* = 5;
+
+    const val = cont.get(id).*;
+
+    try testing.expectEqual(5, val);
 }

@@ -5,6 +5,10 @@ const sdl = @import("sdl3");
 const Window = @import("Window.zig");
 const ini = @import("init.zig");
 
+pub const EngineConfig = struct {
+    entity_list: ?[]const type = null,
+};
+
 pub fn init(title: [:0]const u8, flags: Window.WindowFlags) !void {
     try ini.initSDL();
 
@@ -16,10 +20,11 @@ pub fn init(title: [:0]const u8, flags: Window.WindowFlags) !void {
         else global.Vec2u.vec2(@intCast(dm.width), @intCast(dm.height));
 
     try ini.initWindow(title, win_size.x, win_size.y);
+    try ini.initEntityManager();
 }
 
 pub fn isRunning() bool {
-    return !global.Variables.engine_should_exit;
+    return !global.Variable.engine_should_exit;
 }
 
 pub const global = @import("global.zig");
@@ -33,4 +38,6 @@ pub fn getKeybinds() *@TypeOf(global.Keybinds) {
 
 pub const Texture = @import("texManager.zig");
 pub const Frame = @import("Frame.zig");
-pub const Entity = @import("Entity.zig");
+
+// wrapper for entity stuff for easier access.
+pub const Entity = @import("Entity.zig").SyntApi;

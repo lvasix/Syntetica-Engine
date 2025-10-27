@@ -55,8 +55,13 @@ pub const fnArgs = struct {
 
 /// Manager's internal entity registry type
 pub const entRegistry = struct {
+    /// function pointer for the init function
     fn_init: *const fn(*fnArgs) anyerror!void,
+
+    /// fnptr to the tick fn
     fn_tick: *const fn(*fnArgs) void,
+
+    /// fnptr to the kill fn
     fn_kill: *const fn(*fnArgs) void,
 };
 
@@ -87,7 +92,10 @@ fn getEntityName(comptime T: type) [:0]const u8 {
 /// ```Zig
 /// var manager: Manager(&.{Type1, Type2, Type3}) = ...;
 /// ```
-pub fn Manager(comptime entities: []const type) type {
+pub fn Manager(comptime entities_opt: ?[]const type) type {
+    if(entities_opt == null) return struct{};
+    const entities = entities_opt.?;
+
     var entity_fields: [entities.len + 1]std.builtin.Type.EnumField = undefined;
 
     // create an array of strings for the enum
@@ -134,11 +142,11 @@ pub fn Manager(comptime entities: []const type) type {
         };
 
         /// Entity enum type
-        pub const EntEnum: type = ent_enum_type;
+        pub const EntEnum = ent_enum_type;
 
         /// array containing all of the functions, indeces of this table correspond to 
         /// the numerical values of enum fields in the "ent_enum_type" enum.
-        entity_function_table: [entities.len]entRegistry = undefined,
+        entity_registry: [entities.len]entRegistry = undefined,
 
         /// current simulation tick
         sim_tick: usize = 0,
@@ -163,9 +171,9 @@ pub fn Manager(comptime entities: []const type) type {
             // do the assigning of all function pointers, also initialize the 
             // private data of entities.
             inline for(entities, 0..) |entity, i| {
-                man.entity_function_table[i].fn_init = entity.init;
-                man.entity_function_table[i].fn_tick = entity.tick;
-                man.entity_function_table[i].fn_kill = entity.kill;
+                man.entity_registry[i].fn_init = entity.init;
+                man.entity_registry[i].fn_tick = entity.tick;
+                man.entity_registry[i].fn_kill = entity.kill;
                 entity.data.data = try @TypeOf(entity.data.data).init(allocator);
                 entity.data._initialized = true;
             }
@@ -199,7 +207,7 @@ pub fn Manager(comptime entities: []const type) type {
             };
 
             // init() can fail so we handle that
-            try self.entity_function_table[table_index].fn_init(&arguments);
+            try self.entity_registry[table_index].fn_init(&arguments);
 
             // apply changes that may have occured in the init function.
             self.world_entities.getPtr(id).edaID = arguments.entity_data_id;
@@ -244,7 +252,7 @@ pub fn Manager(comptime entities: []const type) type {
             };
 
             // run the entity's kill function
-            self.entity_function_table[@intFromEnum(entity.entity_type)].fn_kill(&arguments);
+            self.entity_registry[@intFromEnum(entity.entity_type)].fn_kill(&arguments);
 
             self.world_entities.deleteID(entity_id);
         }
@@ -271,7 +279,7 @@ pub fn Manager(comptime entities: []const type) type {
                     .entity_data_id = entity_ptr.edaID,
                 };
 
-                const entity_function = self.entity_function_table[index].fn_tick;
+                const entity_function = self.entity_registry[index].fn_tick;
                 entity_function(&arguments);
 
                 // Apply changes that may have occured during the tick function
@@ -393,6 +401,45 @@ pub fn DataContainer(DataType: type) type {
     };
 }
 
+const global = @import("global.zig");
+//const mgr = mgr;
+var mgr = &global.Manager.entity;
+
+/// Functions and wrappers for easier interfacing with syntetica engine.
+pub const SyntApi = struct {
+    /// API struct for making new entities.
+    pub const api = struct {
+        /// arguments for init, tick and kill functions 
+        pub const args = *fnArgs;
+
+        /// get the struct required for aquiring 
+        /// entity data.
+        pub fn Data(DataType: type) type {
+            return DataContainer(DataType);
+        }
+    };
+
+    /// Spawns a new entity into the world
+    pub fn spawn(entity: @TypeOf(mgr.*).EntEnum) !*@TypeOf(mgr.*).WorldEntity {
+        const id = try mgr.spawn(entity);
+
+        return mgr.getEntityPtr(id);
+    }
+
+    /// Kills an entity using its unique entity ID.
+    pub fn kill(eid: usize) void {
+        mgr.kill(eid);
+    }
+
+    /// Kills all entities of specific type
+    pub fn killAll(etype: @TypeOf(mgr.*).EntEnum) !void {
+        for(try mgr.world_entities.listIDs()) |ent| {
+            if(mgr.getEntityPtr(ent).entity_type == etype) 
+                mgr.kill(ent);
+        }
+    }
+};
+
 // ////////////////////////////////////////////////////// 
 // / UNIT TESTS ///////////////////////////////////////// 
 // //////////////////////////////////////////////////////
@@ -462,9 +509,9 @@ test "Manager.init" {
 
     try testing.expect(man.world_entities._initialized);
 
-    try testing.expect(man.entity_function_table[0].fn_init == FooEntity.init);
-    try testing.expect(man.entity_function_table[0].fn_tick == FooEntity.tick);
-    try testing.expect(man.entity_function_table[0].fn_kill == FooEntity.kill);
+    try testing.expect(man.entity_registry[0].fn_init == FooEntity.init);
+    try testing.expect(man.entity_registry[0].fn_tick == FooEntity.tick);
+    try testing.expect(man.entity_registry[0].fn_kill == FooEntity.kill);
     try testing.expect(FooEntity.data.data._initialized);
     try testing.expect(FooEntity.data._initialized);
 
@@ -613,3 +660,5 @@ test "DataContainer.get" {
 
     try testing.expectEqual(5, val);
 }
+
+// change entity_function_table -> entity_registry

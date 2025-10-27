@@ -101,12 +101,12 @@ pub fn Tilemap(TileType: type, chunk_size: i64) type {
 const test_TilemapChunk = Chunk(u8, 16);
 //const Vec2i = Vec2i;
 
-test "create" {
+test "TileMap.create" {
     var tm: Tilemap(u8, 16) = .init(testing.allocator);
     defer tm.delete();
 }
 
-test "addChunk" {
+test "TileMap.addChunk" {
     var tm: Tilemap(u8, 16) = .init(testing.allocator);
     defer tm.delete();
 
@@ -132,7 +132,7 @@ test "addChunk" {
 //    try testing.expect(false);
 }
 
-test "modify" {
+test "TileMap.modify" {
     var tm: Tilemap(u8, 16) = .init(testing.allocator);
     defer tm.delete();
 
@@ -163,7 +163,7 @@ test "modify" {
     // }
 }
 
-test "get" {
+test "TileMap.get" {
     var tm: Tilemap(u8, 16) = .init(testing.allocator);
     defer tm.delete();
 
@@ -180,7 +180,7 @@ test "get" {
     try testing.expect(tile_v == 3);
 }
 
-test "getChunkPtr" {
+test "TileMap.getChunkPtr" {
     var tm: Tilemap(u8, 16) = .init(testing.allocator);
     defer tm.delete();
 

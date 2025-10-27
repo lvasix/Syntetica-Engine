@@ -23,6 +23,7 @@ pub fn isRunning() bool {
 }
 
 pub const global = @import("global.zig");
+
 pub fn getSettings() *@TypeOf(global.Settings) {
     return &global.Settings;
 }

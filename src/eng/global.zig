@@ -9,7 +9,7 @@ const Color = @import("Color.zig");
 const Tile = @import("tile.zig");
 const chunk_size: comptime_int = 16;
 
-pub const TilemapType = @import("libTilemap.zig").Tilemap(Tile, chunk_size);
+pub const TilemapType = @import("Tilemap.zig").Tilemap(Tile, chunk_size);
 
 pub var Settings: struct {
     screen_size: Vec2u = .vec2(0, 0),
@@ -21,6 +21,7 @@ pub var Variables: struct {
     sdl_default_window: sdl.video.Window = undefined,
     sdl_window_surface: sdl.surface.Surface = undefined,
     sdl_fps_capper: sdl.extras.FramerateCapper(f32) = undefined,
+    background_color: Color = .rgb(0, 0, 0),
     engine_should_exit: bool = false,
     delta_time: f32 = 0,
 } = .{};

@@ -30,6 +30,7 @@ pub fn getKeybinds() *@TypeOf(global.Keybinds) {
 
 pub const Texture = @import("texManager.zig");
 pub const Frame = @import("Frame.zig");
+pub const Physics = @import("Physics.zig");
 
 // wrapper for entity stuff for easier access.
 pub const Entity = @import("Entity.zig").SyntApi;

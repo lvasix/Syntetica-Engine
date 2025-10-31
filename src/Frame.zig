@@ -3,7 +3,7 @@ const global = @import("global.zig");
 const rl = @import("raylib");
 
 fn drawEntities() void {
-    for (global.Manager.entity.data.listIDs) |value| {
+    for (try global.Manager.entity.data.listIDs) |value| {
         _ = value;
     }
 }

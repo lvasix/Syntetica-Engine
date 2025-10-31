@@ -10,6 +10,7 @@ const Tile = @import("tile.zig");
 const Entity = @import("Entity.zig");
 const main = @import("root");
 const chunk_size: comptime_int = 16;
+pub const alloc_size: comptime_int = 200;
 
 pub const Tilemap = @import("Tilemap.zig").Tilemap(Tile, chunk_size);
 

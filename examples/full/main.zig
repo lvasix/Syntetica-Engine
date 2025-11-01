@@ -22,12 +22,16 @@ pub fn main() !void {
         .force = .val(20, 30),
         .mobility = .rigid,
     });
+    const body = psim.bodies.getPtr(id);
 
     std.debug.print("BODY1: {}\n", .{psim.bodies.get(id).pos});
 
+    var body_shape = synt.Shapes.square(body.pos, 20);
+    const wall = synt.Shapes.rect(.val(100, 100), 20, 40);
+
     synt.rl.setTargetFPS(30);
     while(synt.isRunning()){
-        const body = psim.bodies.getPtr(id);
+        body_shape.reshape(synt.Shapes.square(body.pos, 20));
 
         if (synt.rl.isKeyDown(.w)) {
             body.force.add(.val(0, -2));
@@ -46,7 +50,9 @@ pub fn main() !void {
         try synt.Frame.start();
         defer synt.Frame.end();
 
+        synt.rl.drawRectangle(100, 100, 20, 40, if(body_shape.overlaps(wall)) .red else .white);
         synt.rl.drawRectangle(@intFromFloat(body.pos.x), @intFromFloat(body.pos.y), 20, 20, .white);
+
 
         synt.rl.drawLineEx( 
             .init(body.pos.x + 10, body.pos.y + 10), 
@@ -55,4 +61,8 @@ pub fn main() !void {
             .red,
         );
     }
+
+    const shape1 = synt.Shapes.square(.val(2, 2), 4);
+    const shape2 = synt.Shapes.rect(.val(2, 5), 2, 4);
+    std.debug.print("SHAPE: {}\n", .{shape1.overlaps(shape2)});
 }

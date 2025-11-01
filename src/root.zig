@@ -34,3 +34,5 @@ pub const Physics = @import("Physics.zig");
 
 // wrapper for entity stuff for easier access.
 pub const Entity = @import("Entity.zig").SyntApi;
+
+pub const Shapes = @import("Shapes.zig");

@@ -74,8 +74,11 @@ pub fn Manager(comptime tex_meta: []const Meta) type {
 
             std.debug.print("PATH: {s}", .{tex_path});
 
-            if(!self.loaded_textures[index])
+            // checks if the requested texture is loaded into GPU memory and loads it if not.
+            if(!self.loaded_textures[index]) {
                 self.tex_arr[index].rl_texture = try rl.Texture.init(@as([:0]u8, tex_path));
+                self.loaded_textures[index] = true;
+            }
 
             return self.tex_arr[index];
         }

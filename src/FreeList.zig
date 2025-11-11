@@ -54,11 +54,11 @@ pub fn SimpleLinkedFreeList(DataType: type, alloc_size: usize) type {
 
         /// Data type used for iterating over the SimpleLinkedFreeList.
         /// DO NOT create manually, instead use .createIterator() method.
-        const Iterator = struct {
+        pub const Iterator = struct {
             /// free list
             fl: *Self,
 
-            current_data: DataType = undefined,
+            prev_id: usize = 0,
             current_id: usize = 0,
             next_id: usize = 0,
             count: usize = 0,
@@ -85,19 +85,31 @@ pub fn SimpleLinkedFreeList(DataType: type, alloc_size: usize) type {
             /// }
             /// ```
             pub fn next(self: *Iterator) ?DataType {
+                return if(self.nextPtr()) |val| val.* else null;
+            }
+
+            pub fn nextPtr(self: *Iterator) ?*DataType {
                 self.current_id = self.next_id;
 
-                self.current_data = self.fl.data[self.current_id];
-
                 self.next_id = self.fl._data_info[self.current_id].next;
+                self.prev_id = self.fl._data_info[self.current_id].prev;
 
+                // check if we reached the end at value, it shouldn't end exactly at that 
+                // value, but after it passes it, so we check if the value before was the 
+                // wanted value, but if the slice we are iterating over is the only slice,
+                // we would make this end prematurely, so we check if we had at least one 
+                // iteration.
                 const check_should_end = 
-                    if(self.end_at != null) self.current_id == self.end_at.? + 1 else false;
+                    if(self.end_at != null)
+                        // last node was the node we should end at and we had at least 
+                        // one iteration
+                        self.prev_id == self.end_at.? and self.count != 0 
+                    else false;
                 const ret = 
                     if(self.count == self.fl._occupied or check_should_end) 
                         null 
                     else 
-                        @as(?DataType, self.current_data);
+                        @as(?*DataType, &self.fl.data[self.current_id]);
 
                 self.count += 1;
 
